@@ -40,9 +40,6 @@ def signup(event, context):
     # Initialise
     logger, meadow, table = initialise()
 
-    # Connect to SES
-    ses = boto3.client("ses")
-
     # Load details from event
     try:
         body = base64.b64decode(event["body"].encode("utf-8"))
@@ -86,27 +83,18 @@ def signup(event, context):
 
     # Send Validation Email
     # This needs an EXTENSIVE rewrite once we start sending newsletters!
-    SENDER = meadow["organisation"] + " <noreply@" + meadow["meadow_domain"] + ">"
-    SUBJECT = (
-        "Confirm your request to recieve the " + meadow["organisation"] + " newsletter"
-    )
-    CHARSET = "UTF-8"
-
-    s3 = boto3.resource("s3")
-    combined_template = (
-        s3.Object(meadow["barn"], "transactional/validate.j2")
-        .get()["Body"]
-        .read()
-        .decode("utf-8")
-    )
-    validation_html_template = Template(
-        combined_template.split("---TEXT-HTML-SEPARATOR---")[0]
-    )
-    validation_text_template = Template(
-        combined_template.split("---TEXT-HTML-SEPARATOR---")[1]
-    )
-
     email_sent_date = datetime.now().strftime("%Y%m%d%H%M%S")
+    subject = (
+        "Confirm your request to receive the " + meadow["organisation"] + " newsletter"
+    )
+    sender = meadow["organisation"] + " <noreply@" + meadow["meadow_domain"] + ">"
+
+    try:
+        validation_html_template, validation_text_template = load_template(
+            meadow["barn"], "transactional/validate.j2"
+        )
+    except Exception as e:
+        logger.info("Could not load template: %s", e)
 
     validation_url = (
         "https://"
@@ -128,49 +116,27 @@ def signup(event, context):
         + email_sent_date
     )
 
-    BODY_HTML = validation_html_template.render(
+    body_html = validation_html_template.render(
         validation_path=validation_url, unsubscribe_path=unsubscribe_url
     )
 
-    BODY_TEXT = validation_text_template.render(
+    body_text = validation_text_template.render(
         validation_path=validation_url, unsubscribe_path=unsubscribe_url
     )
 
     try:
-        ses.send_email(
-            Destination={
-                "ToAddresses": [
-                    email,
-                ],
-            },
-            Message={
-                "Body": {
-                    "Html": {
-                        "Charset": CHARSET,
-                        "Data": BODY_HTML,
-                    },
-                    "Text": {
-                        "Charset": CHARSET,
-                        "Data": BODY_TEXT,
-                    },
-                },
-                "Subject": {
-                    "Charset": CHARSET,
-                    "Data": SUBJECT,
-                },
-            },
-            Source=SENDER,
-        )
-        table.put_item(
-            Item={
-                "partitionKey": email,
-                "sortKey": "EMAIL_SENT#" + email_sent_date,
-                "random_string": random_string,
-            },
-            ConditionExpression="attribute_not_exists(partitionKey)",
+        send_email(
+            sender,
+            email,
+            subject,
+            email_sent_date,
+            body_html,
+            body_text,
+            random_string,
+            table,
         )
     except botocore.exceptions.ClientError as error:
-        logger.info("Could not send validation email")
+        logger.info("Could not send validation email.")
         raise error
 
     # Never tell the user what happened, any error should be internal
@@ -302,32 +268,12 @@ def send_newsletter(event, context):
         logger.info("Could not load newsletter details from event")
         raise error
 
-    # Load email template from bucket
-    s3 = boto3.resource("s3")
     try:
-        combined_template = (
-            s3.Object(meadow["barn"], "newsletters/" + newsletter_slug + ".j2")
-            .get()["Body"]
-            .read()
-            .decode("utf-8")
+        validation_html_template, validation_text_template = load_template(
+            meadow["barn"], "newsletters/" + newsletter_slug + ".j2"
         )
-    except botocore.exceptions.ClientError as error:
-        logger.info("Could not load template from s3 bucket")
-        raise error
-
-    # Check for split point and separate HTML and text templates
-    try:
-        assert "---TEXT-HTML-SEPARATOR---" in combined_template
-    except AssertionError as error:
-        logger.info("Template does not contain correct separator")
-        raise error
-
-    validation_html_template = Template(
-        combined_template.split("---TEXT-HTML-SEPARATOR---")[0]
-    )
-    validation_text_template = Template(
-        combined_template.split("---TEXT-HTML-SEPARATOR---")[1]
-    )
+    except Exception as e:
+        logger.info("Could not load template: %s", e)
 
     # Load subscribers from users table
     try:
@@ -339,14 +285,10 @@ def send_newsletter(event, context):
         logger.info("Could not load subscribers from users table")
         raise error
 
-    # Connect to SES
-    ses = boto3.client("ses")
-
     # Set common newsletter attributes
     email_sent_date = datetime.now().strftime("%Y%m%d%H%M%S")
-    SENDER = meadow["organisation"] + " <noreply@" + meadow["meadow_domain"] + ">"
-    SUBJECT = newsletter_subject
-    CHARSET = "UTF-8"
+    subject = newsletter_subject
+    sender = meadow["organisation"] + " <noreply@" + meadow["meadow_domain"] + ">"
 
     # Iterate over subscribers and send them the newsletter
     for subscriber in subscribers["Items"]:
@@ -372,45 +314,93 @@ def send_newsletter(event, context):
         )
 
         # Render HTML and Text body for the newsletter
-        BODY_HTML = validation_html_template.render(unsubscribe_path=unsubscribe_url)
-        BODY_TEXT = validation_text_template.render(unsubscribe_path=unsubscribe_url)
+        body_html = validation_html_template.render(unsubscribe_path=unsubscribe_url)
+        body_text = validation_text_template.render(unsubscribe_path=unsubscribe_url)
 
         # Attempt to send the newsletter
         try:
-            ses.send_email(
-                Destination={
-                    "ToAddresses": [
-                        email,
-                    ],
-                },
-                Message={
-                    "Body": {
-                        "Html": {
-                            "Charset": CHARSET,
-                            "Data": BODY_HTML,
-                        },
-                        "Text": {
-                            "Charset": CHARSET,
-                            "Data": BODY_TEXT,
-                        },
-                    },
-                    "Subject": {
-                        "Charset": CHARSET,
-                        "Data": SUBJECT,
-                    },
-                },
-                Source=SENDER,
-            )
-            table.put_item(
-                Item={
-                    "partitionKey": email,
-                    "sortKey": "EMAIL_SENT#" + email_sent_date,
-                    "random_string": random_string,
-                },
-                ConditionExpression="attribute_not_exists(partitionKey)",
+            send_email(
+                sender,
+                email,
+                subject,
+                email_sent_date,
+                body_html,
+                body_text,
+                random_string,
+                table,
             )
         except botocore.exceptions.ClientError as error:
-            logger.info("Could not send newsletter:" + error)
+            logger.info("Could not send newsletter: %s", error)
             continue
 
     return 0
+
+
+def send_email(
+    sender, recipient, subject, sent_date, body_html, body_text, random_string, table
+):
+    # Connect to SES
+    ses = boto3.client("ses")
+
+    charset = "UTF-8"
+
+    # Attempt to send
+    ses.send_email(
+        Destination={
+            "ToAddresses": [
+                recipient,
+            ],
+        },
+        Message={
+            "Body": {
+                "Html": {
+                    "Charset": charset,
+                    "Data": body_html,
+                },
+                "Text": {
+                    "Charset": charset,
+                    "Data": body_text,
+                },
+            },
+            "Subject": {
+                "Charset": charset,
+                "Data": subject,
+            },
+        },
+        Source=sender,
+    )
+    table.put_item(
+        Item={
+            "partitionKey": recipient,
+            "sortKey": "EMAIL_SENT#" + sent_date,
+            "random_string": random_string,
+        },
+        ConditionExpression="attribute_not_exists(partitionKey)",
+    )
+
+
+def load_template(bucket_name, template_key):
+    # Load email template from bucket
+    s3 = boto3.resource("s3")
+
+    try:
+        combined_template = (
+            s3.Object(bucket_name, template_key).get()["Body"].read().decode("utf-8")
+        )
+    except botocore.exceptions.ClientError as error:
+        raise error("Could not load template from s3 bucket")
+
+    # Check for split point and separate HTML and text templates
+    try:
+        assert "---TEXT-HTML-SEPARATOR---" in combined_template
+    except AssertionError as error:
+        raise error("Template does not contain correct separator")
+
+    validation_html_template = Template(
+        combined_template.split("---TEXT-HTML-SEPARATOR---")[0]
+    )
+    validation_text_template = Template(
+        combined_template.split("---TEXT-HTML-SEPARATOR---")[1]
+    )
+
+    return validation_html_template, validation_text_template
