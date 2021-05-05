@@ -268,6 +268,14 @@ def send_newsletter(event, context):
         logger.info("Could not load newsletter details from event")
         raise error
 
+    if (
+        newsletter_slug.isspace()
+        or not newsletter_slug
+        or newsletter_subject.isspace()
+        or not newsletter_subject
+    ):
+        raise ValueError("Newsletter slug and newsletter subject cannot be empty.")
+
     try:
         validation_html_template, validation_text_template = load_template(
             meadow["barn"], "newsletters/" + newsletter_slug + ".j2"
