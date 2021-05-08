@@ -15,7 +15,6 @@ def initialise():
     ddb, ssm, ses = baseInitialise(mockdynamodb2, mockssm, mockses, mocks3)
 
     # Create mock s3 barn
-    s3 = boto3.client("s3", region_name="us-east-1")
     mock_email = """
     Did you sign up to this newsletter?
     If so, follow this path: {{ validation_path }}
@@ -29,11 +28,8 @@ def initialise():
     """.encode(
         "utf-8"
     )
-    s3.create_bucket(
-        Bucket="my-barn", CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
-    )
-    s3.put_object(Body=mock_email, Bucket="my-barn", Key="transactional/validate.j2")
-    s3.put_object(Body=mock_email, Bucket="my-barn", Key="newsletters/20210421.j2")
+
+    s3 = mockBarn(mock_email)
 
     yield ddb, ssm, ses, s3
 
@@ -56,7 +52,6 @@ def initialiseTemplateWithIncorrectSeperator():
     ddb, ssm, ses = baseInitialise(mockdynamodb2, mockssm, mockses, mocks3)
 
     # Create mock s3 barn
-    s3 = boto3.client("s3", region_name="us-east-1")
     mock_email = """
     Did you sign up to this newsletter?
     If so, follow this path: {{ validation_path }}
@@ -70,11 +65,8 @@ def initialiseTemplateWithIncorrectSeperator():
     """.encode(
         "utf-8"
     )
-    s3.create_bucket(
-        Bucket="my-barn", CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
-    )
-    s3.put_object(Body=mock_email, Bucket="my-barn", Key="transactional/validate.j2")
-    s3.put_object(Body=mock_email, Bucket="my-barn", Key="newsletters/20210421.j2")
+
+    s3 = mockBarn(mock_email)
 
     yield ddb, ssm, ses, s3
 
@@ -97,16 +89,12 @@ def initialiseTemplateWithEmptyBody():
     ddb, ssm, ses = baseInitialise(mockdynamodb2, mockssm, mockses, mocks3)
 
     # Create mock s3 barn
-    s3 = boto3.client("s3", region_name="us-east-1")
     mock_email = """
     """.encode(
         "utf-8"
     )
-    s3.create_bucket(
-        Bucket="my-barn", CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
-    )
-    s3.put_object(Body=mock_email, Bucket="my-barn", Key="transactional/validate.j2")
-    s3.put_object(Body=mock_email, Bucket="my-barn", Key="newsletters/20210421.j2")
+
+    s3 = mockBarn(mock_email)
 
     yield ddb, ssm, ses, s3
 
@@ -183,3 +171,15 @@ def baseInitialise(mockdynamodb2, mockssm, mockses, mocks3):
     )
 
     return ddb, ssm, ses
+
+
+def mockBarn(body):
+    s3 = boto3.client("s3", region_name="us-east-1")
+
+    s3.create_bucket(
+        Bucket="my-barn", CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
+    )
+    s3.put_object(Body=body, Bucket="my-barn", Key="transactional/validate.j2")
+    s3.put_object(Body=body, Bucket="my-barn", Key="newsletters/20210421.j2")
+
+    return s3
