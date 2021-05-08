@@ -55,7 +55,7 @@ def test_send_newsletter_template_separate_is_incorrect(
         send_newsletter(event, None)
 
 
-def test_send_newsletter_template_body_is_empty(initialiseTemplateWithEmptyBody):
+def test_send_newsletter_template_body_is_empty(initialiseTemplateWithoutBody):
     with pytest.raises(Exception, match="Template does not contain correct separator"):
         event = {
             "newsletter_slug": "20210421",

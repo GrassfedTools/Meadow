@@ -78,7 +78,7 @@ def initialiseTemplateWithIncorrectSeperator():
 
 
 @pytest.fixture(scope="function")
-def initialiseTemplateWithEmptyBody():
+def initialiseTemplateWithoutBody():
     # Mock endpoints
     mockdynamodb2 = mock_dynamodb2()
     mockssm = mock_ssm()
@@ -89,12 +89,13 @@ def initialiseTemplateWithEmptyBody():
     ddb, ssm, ses = baseInitialise(mockdynamodb2, mockssm, mockses, mocks3)
 
     # Create mock s3 barn
-    mock_email = """
-    """.encode(
-        "utf-8"
-    )
+    s3 = boto3.client("s3", region_name="us-east-1")
 
-    s3 = mockBarn(mock_email)
+    s3.create_bucket(
+        Bucket="my-barn", CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
+    )
+    s3.put_object(Bucket="my-barn", Key="transactional/validate.j2")
+    s3.put_object(Bucket="my-barn", Key="newsletters/20210421.j2")
 
     yield ddb, ssm, ses, s3
 
