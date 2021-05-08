@@ -29,6 +29,9 @@ update-requirements: install
 .venv/bin/aws:
 	.venv/bin/pip install -U awscli
 
+.venv/bin/coverage:
+	.venv/bin/pip install -U coverage
+
 black: .venv/bin/black # Formats code with black
 	.venv/bin/black handlers/*.py tests --check
 
@@ -42,6 +45,9 @@ conformity-tests: black isort flake8
 
 unit-tests: .venv/bin/pytest # Runs unit tests
 	cd handlers;AWS_DEFAULT_REGION="us-east-1" ../.venv/bin/pytest ../tests/unit
+
+coverage-test: .venv/bin/pytest .venv/bin/coverage
+	cd handlers;AWS_DEFAULT_REGION="us-east-1" ../.venv/bin/coverage run -m pytest ../tests/unit;../.venv/bin/coverage report -m
 
 feature-tests: .venv/bin/pytest-bdd # Runs feature tests locally
 	echo $$GMAIL_ACCESS_TOKEN > gmail_token.json

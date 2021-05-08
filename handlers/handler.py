@@ -93,8 +93,9 @@ def signup(event, context):
         validation_html_template, validation_text_template = load_template(
             meadow["barn"], "transactional/validate.j2"
         )
-    except Exception as e:
-        logger.info("Could not load template: %s", e)
+    except Exception as error:
+        logger.info("Could not load template: %s", error)
+        raise error
 
     validation_url = (
         "https://"
@@ -268,12 +269,21 @@ def send_newsletter(event, context):
         logger.info("Could not load newsletter details from event")
         raise error
 
+    if (
+        newsletter_slug.isspace()
+        or not newsletter_slug
+        or newsletter_subject.isspace()
+        or not newsletter_subject
+    ):
+        raise ValueError("Newsletter slug and newsletter subject cannot be empty.")
+
     try:
         validation_html_template, validation_text_template = load_template(
             meadow["barn"], "newsletters/" + newsletter_slug + ".j2"
         )
-    except Exception as e:
-        logger.info("Could not load template: %s", e)
+    except Exception as error:
+        logger.info("Could not load template: %s", error)
+        raise error
 
     # Load subscribers from users table
     try:
@@ -388,19 +398,24 @@ def load_template(bucket_name, template_key):
             s3.Object(bucket_name, template_key).get()["Body"].read().decode("utf-8")
         )
     except botocore.exceptions.ClientError as error:
-        raise error("Could not load template from s3 bucket")
+        raise Exception("Could not load template from s3 bucket", error)
 
     # Check for split point and separate HTML and text templates
     try:
         assert "---TEXT-HTML-SEPARATOR---" in combined_template
-    except AssertionError as error:
-        raise error("Template does not contain correct separator")
+    except AssertionError:
+        raise Exception("Template does not contain correct separator")
 
-    validation_html_template = Template(
-        combined_template.split("---TEXT-HTML-SEPARATOR---")[0]
-    )
-    validation_text_template = Template(
-        combined_template.split("---TEXT-HTML-SEPARATOR---")[1]
-    )
+    html_template = combined_template.split("---TEXT-HTML-SEPARATOR---")[0]
+    text_template = combined_template.split("---TEXT-HTML-SEPARATOR---")[1]
+
+    if html_template.isspace() or not html_template:
+        raise ValueError("Newsletter HTML template cannot be empty.")
+
+    if text_template.isspace() or not text_template:
+        raise ValueError("Newsletter text template cannot be empty.")
+
+    validation_html_template = Template(html_template)
+    validation_text_template = Template(text_template)
 
     return validation_html_template, validation_text_template
