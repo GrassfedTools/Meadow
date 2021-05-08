@@ -43,20 +43,20 @@ def test_send_newsletter_subject_is_empty(initialise):
         }
         send_newsletter(event, None)
 
-def test_send_newsletter_template_separate_is_incorrect(initialiseTemplateWithIncorrectSeperator):
-    with pytest.raises(
-        Exception, match="Template does not contain correct separator"
-    ):
+
+def test_send_newsletter_template_separate_is_incorrect(
+    initialiseTemplateWithIncorrectSeperator,
+):
+    with pytest.raises(Exception, match="Template does not contain correct separator"):
         event = {
             "newsletter_slug": "20210421",
             "newsletter_subject": "Meadow Testing Newsletter",
         }
         send_newsletter(event, None)
 
+
 def test_send_newsletter_template_body_is_empty(initialiseTemplateWithEmptyBody):
-    with pytest.raises(
-        Exception, match="Template does not contain correct separator"
-    ):
+    with pytest.raises(Exception, match="Template does not contain correct separator"):
         event = {
             "newsletter_slug": "20210421",
             "newsletter_subject": "Meadow Testing Newsletter",
