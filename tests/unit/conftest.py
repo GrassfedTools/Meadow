@@ -41,6 +41,70 @@ def initialise():
 
 
 @pytest.fixture(scope="function")
+def initialiseWithEmptyHtmlTemplate():
+    # Mock endpoints
+    mockdynamodb2 = mock_dynamodb2()
+    mockssm = mock_ssm()
+    mockses = mock_ses()
+    mocks3 = mock_s3()
+
+    # Start endpoints. Mock SES users, DynamoDB table and SSM
+    ddb, ssm, ses = baseInitialise(mockdynamodb2, mockssm, mockses, mocks3)
+
+    # Create mock s3 barn
+    mock_email = """
+    ---TEXT-HTML-SEPARATOR---
+    Did you sign up to this newsletter?
+    If so, follow this path: {{ validation_path }}
+
+    To unsubscribe, click here: {{ unsubscribe_path }}
+    """
+
+    s3 = mockBarn(mock_email)
+
+    yield ddb, ssm, ses, s3
+
+    # Stop endpoints
+    mockdynamodb2.stop()
+    mockssm.stop()
+    mockses.stop()
+    mocks3.stop()
+
+
+@pytest.fixture(scope="function")
+def initialiseWithEmptyTextTemplate():
+    # Mock endpoints
+    mockdynamodb2 = mock_dynamodb2()
+    mockssm = mock_ssm()
+    mockses = mock_ses()
+    mocks3 = mock_s3()
+
+    # Start endpoints. Mock SES users, DynamoDB table and SSM
+    ddb, ssm, ses = baseInitialise(mockdynamodb2, mockssm, mockses, mocks3)
+
+    # Create mock s3 barn
+    mock_email = """
+    Did you sign up to this newsletter?
+    If so, follow this path: {{ validation_path }}
+
+    To unsubscribe, click here: {{ unsubscribe_path }}
+    ---TEXT-HTML-SEPARATOR---
+    """.encode(
+        "utf-8"
+    )
+
+    s3 = mockBarn(mock_email)
+
+    yield ddb, ssm, ses, s3
+
+    # Stop endpoints
+    mockdynamodb2.stop()
+    mockssm.stop()
+    mockses.stop()
+    mocks3.stop()
+
+
+@pytest.fixture(scope="function")
 def initialiseTemplateWithIncorrectSeperator():
     # Mock endpoints
     mockdynamodb2 = mock_dynamodb2()

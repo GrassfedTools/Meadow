@@ -406,11 +406,16 @@ def load_template(bucket_name, template_key):
     except AssertionError:
         raise Exception("Template does not contain correct separator")
 
-    validation_html_template = Template(
-        combined_template.split("---TEXT-HTML-SEPARATOR---")[0]
-    )
-    validation_text_template = Template(
-        combined_template.split("---TEXT-HTML-SEPARATOR---")[1]
-    )
+    html_template = combined_template.split("---TEXT-HTML-SEPARATOR---")[0]
+    text_template = combined_template.split("---TEXT-HTML-SEPARATOR---")[1]
+
+    if html_template.isspace() or not html_template:
+        raise ValueError("Newsletter HTML template cannot be empty.")
+
+    if text_template.isspace() or not text_template:
+        raise ValueError("Newsletter text template cannot be empty.")
+
+    validation_html_template = Template(html_template)
+    validation_text_template = Template(text_template)
 
     return validation_html_template, validation_text_template
