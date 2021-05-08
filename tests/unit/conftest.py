@@ -11,6 +11,40 @@ def initialise():
     mockses = mock_ses()
     mocks3 = mock_s3()
 
+    # Start endpoints. Mock SES users, DynamoDB table and SSM
+    ddb, ssm, ses = baseInitialise(mockdynamodb2, mockssm, mockses, mocks3)
+
+    # Create mock s3 barn
+    s3 = boto3.client("s3", region_name="us-east-1")
+    mock_email = """
+    Did you sign up to this newsletter?
+    If so, follow this path: {{ validation_path }}
+
+    To unsubscribe, click here: {{ unsubscribe_path }}
+    ---TEXT-HTML-SEPARATOR---
+    Did you sign up to this newsletter?
+    If so, follow this path: {{ validation_path }}
+
+    To unsubscribe, click here: {{ unsubscribe_path }}
+    """.encode(
+        "utf-8"
+    )
+    s3.create_bucket(
+        Bucket="my-barn", CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
+    )
+    s3.put_object(Body=mock_email, Bucket="my-barn", Key="transactional/validate.j2")
+    s3.put_object(Body=mock_email, Bucket="my-barn", Key="newsletters/20210421.j2")
+
+    yield ddb, ssm, ses, s3
+
+    # Stop endpoints
+    mockdynamodb2.stop()
+    mockssm.stop()
+    mockses.stop()
+    mocks3.stop()
+
+
+def baseInitialise(mockdynamodb2, mockssm, mockses, mocks3):
     # Start endpoints
     mockdynamodb2.start()
     mockssm.start()
@@ -75,31 +109,4 @@ def initialise():
         Type="String",
     )
 
-    # Create mock s3 barn
-    s3 = boto3.client("s3", region_name="us-east-1")
-    mock_email = """
-    Did you sign up to this newsletter?
-    If so, follow this path: {{ validation_path }}
-
-    To unsubscribe, click here: {{ unsubscribe_path }}
-    ---TEXT-HTML-SEPARATOR---
-    Did you sign up to this newsletter?
-    If so, follow this path: {{ validation_path }}
-
-    To unsubscribe, click here: {{ unsubscribe_path }}
-    """.encode(
-        "utf-8"
-    )
-    s3.create_bucket(
-        Bucket="my-barn", CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
-    )
-    s3.put_object(Body=mock_email, Bucket="my-barn", Key="transactional/validate.j2")
-    s3.put_object(Body=mock_email, Bucket="my-barn", Key="newsletters/20210421.j2")
-
-    yield ddb, ssm, ses, s3
-
-    # Stop endpoints
-    mockdynamodb2.stop()
-    mockssm.stop()
-    mockses.stop()
-    mocks3.stop()
+    return ddb, ssm, ses
